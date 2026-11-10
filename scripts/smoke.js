@@ -8,7 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const { app, BrowserWindow, ipcMain, clipboard } = require('electron');
 
-const { fetchPassage } = require('../src/api');
+const { fetchPassage, searchCached } = require('../src/api');
 const { loadState, saveState } = require('../src/store');
 
 const OUT = path.join(__dirname, 'out');
@@ -27,11 +27,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 app.whenReady().then(async () => {
   ipcMain.handle('bible:fetch', (_e, passage) => fetchPassage(passage));
+  ipcMain.handle('bible:search', (_e, term) => searchCached(term));
   ipcMain.handle('state:load', () => loadState());
   ipcMain.handle('state:save', (_e, state) => saveState(state));
   ipcMain.handle('clipboard:write', (_e, text) => { clipboard.writeText(String(text)); return true; });
   ipcMain.handle('theme:set', () => true);
-  ipcMain.handle('app:info', () => ({ platform: process.platform, version: '1.0.0' }));
+  ipcMain.handle('app:info', () => ({ platform: process.platform, version: '1.0.1' }));
 
   const win = new BrowserWindow({
     width: 1200,
@@ -134,6 +135,58 @@ app.whenReady().then(async () => {
     rows: document.querySelectorAll('.verse-row').length
   })`);
   check('multi-passage request', state.groups >= 2 && state.rows > 0, JSON.stringify(state));
+
+  // cached keyword search
+  await js(`(() => {
+    const input = document.getElementById('search-input');
+    input.focus();
+    input.value = 'shepherd';
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  await wait(1000);
+  state = await js(`({
+    mode: document.getElementById('suggestions').classList.contains('search-mode'),
+    rows: document.querySelectorAll('.search-row').length,
+    first: document.querySelector('.search-ref')?.textContent || '',
+    foot: document.querySelector('.search-foot')?.textContent || ''
+  })`);
+  check('keyword search finds cached verse',
+    state.mode && state.rows > 0 && state.first === 'Psalms 23:1' && state.foot.includes('cached passage'),
+    JSON.stringify(state));
+  await win.webContents.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'search.png'), img.toPNG()));
+
+  await js(`document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
+  await wait(2200);
+  state = await js(`({
+    title: document.getElementById('doc-title').textContent,
+    selected: document.querySelector('.verse-row.selected')?.dataset.id || '',
+    bar: !document.getElementById('action-bar').classList.contains('hidden'),
+    input: document.getElementById('search-input').value
+  })`);
+  check('keyword result opens and selects the verse',
+    state.title === 'Psalms 23' && state.selected === 'Psalms|23|1' && state.bar && state.input === '',
+    JSON.stringify(state));
+
+  await js(`(() => {
+    const input = document.getElementById('search-input');
+    input.focus();
+    input.value = 'zzzqqq';
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  await wait(900);
+  state = await js(`({
+    mode: document.getElementById('suggestions').classList.contains('search-mode'),
+    empty: document.querySelector('.search-empty')?.textContent || ''
+  })`);
+  check('keyword search empty state', state.mode && /Nothing cached/.test(state.empty), state.empty);
+
+  await js(`(() => {
+    const input = document.getElementById('search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  })()`);
+  await wait(300);
 
   // persistence
   const persisted = loadState();

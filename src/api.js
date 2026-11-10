@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const NETBible = require('./core/bible');
 
 // Port of the Swift BibleAPI actor: memory cache -> network -> disk cache.
 
@@ -129,4 +130,78 @@ async function fetchPassage(passage) {
   }
 }
 
-module.exports = { fetchPassage };
+// MARK: - Cached keyword search
+
+const BOOK_ORDER = new Map(NETBible.BOOKS.map((book, index) => [book.name.toLowerCase(), index]));
+const SEARCH_OPTIONS = { sensitivity: 'base' };
+
+function stripMarks(text) {
+  return NETBible.cleanText(text);
+}
+
+/**
+ * Full-text search over passages already cached on disk.
+ * Every whitespace-separated token must appear somewhere in the verse.
+ */
+function searchCached(term, limit = 80) {
+  const tokens = String(term || '')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (!tokens.length) return { verses: [], passages: 0, truncated: false };
+
+  let files = [];
+  try {
+    files = fs.readdirSync(cacheDirectory()).filter((name) => name.toLowerCase().endsWith('.json'));
+  } catch (_) {
+    return { verses: [], passages: 0, truncated: false };
+  }
+
+  const seen = new Set();
+  const hits = [];
+
+  for (const name of files) {
+    let verses = [];
+    try {
+      const parsed = JSON.parse(fs.readFileSync(path.join(cacheDirectory(), name), 'utf8'));
+      if (Array.isArray(parsed)) verses = parsed;
+    } catch (_) { continue; }
+
+    for (const item of verses) {
+      if (!item || item.bookname == null || item.chapter == null || item.verse == null || item.text == null) continue;
+      const verse = {
+        bookname: String(item.bookname),
+        chapter: String(item.chapter),
+        verse: String(item.verse),
+        text: String(item.text)
+      };
+      const id = NETBible.verseId(verse);
+      if (seen.has(id)) continue;
+
+      const text = stripMarks(verse.text);
+      const matches = tokens.every((token) => text.toLocaleLowerCase().includes(token.toLocaleLowerCase()));
+      if (!matches) continue;
+
+      seen.add(id);
+      hits.push({ ...verse, id, reference: NETBible.verseReference(verse) });
+    }
+  }
+
+  hits.sort((a, b) => {
+    const left = BOOK_ORDER.has(a.bookname.toLowerCase()) ? BOOK_ORDER.get(a.bookname.toLowerCase()) : 999;
+    const right = BOOK_ORDER.has(b.bookname.toLowerCase()) ? BOOK_ORDER.get(b.bookname.toLowerCase()) : 999;
+    if (left !== right) return left - right;
+    const chapterDiff = Number(a.chapter) - Number(b.chapter);
+    if (chapterDiff) return chapterDiff;
+    return Number(a.verse) - Number(b.verse);
+  });
+
+  return {
+    verses: hits.slice(0, limit),
+    passages: files.length,
+    truncated: hits.length > limit
+  };
+}
+
+module.exports = { fetchPassage, searchCached };

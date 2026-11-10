@@ -56,10 +56,19 @@ const ui = {
   settingsOpen: false,
   editing: null,
   suggestions: [],
-  suggestionIndex: -1
+  suggestionIndex: -1,
+  keywordMode: false,
+  searchResults: [],
+  searchIndex: -1,
+  searchTerm: '',
+  searchScanned: 0,
+  searchTruncated: false,
+  searchBusy: false
 };
 
 let loadToken = 0;
+let searchToken = 0;
+let searchTimer = null;
 let saveTimer = null;
 let copyTimer = null;
 
@@ -696,8 +705,105 @@ function closeNoteEditor() {
 
 /* ---------- search ---------- */
 
+const SEARCH_ROWS = 6;
+
+function isKeywordTerm(value) {
+  const term = String(value || '').trim();
+  if (term.length < 3) return false;
+  if (PassageQuery.userInput(term).reference()) return false;
+  return NB.suggestions(term).length === 0;
+}
+
+/** Text around the first hit so the match is visible without highlighting it. */
+function snippetFor(verse, term, width = 170) {
+  const text = verse.cleanText || cleanText(verse.text);
+  const tokens = String(term || '').split(/\s+/).filter(Boolean);
+
+  let anchor = 0;
+  for (const token of tokens) {
+    const at = text.toLowerCase().indexOf(token.toLowerCase());
+    if (at >= 0) { anchor = at; break; }
+  }
+
+  let start = Math.max(0, anchor - 42);
+  if (start > 0) {
+    const space = text.indexOf(' ', start);
+    if (space >= 0 && space < anchor) start = space + 1;
+  }
+
+  let snippet = text.slice(start, start + width);
+  if (start > 0) snippet = '\u2026' + snippet;
+  if (start + width < text.length) snippet += '\u2026';
+  return snippet;
+}
+
+function clearSearchState() {
+  clearTimeout(searchTimer);
+  searchToken++;
+  ui.keywordMode = false;
+  ui.searchResults = [];
+  ui.searchIndex = -1;
+  ui.searchTerm = '';
+  ui.searchScanned = 0;
+  ui.searchTruncated = false;
+  ui.searchBusy = false;
+  $('search-field').classList.remove('searching');
+  $('suggestions').classList.remove('search-mode');
+}
+
+function searchFooter() {
+  if (!ui.searchScanned) return 'Nothing cached yet. Passages you open become searchable here.';
+  const passages = `${ui.searchScanned} cached passage${ui.searchScanned === 1 ? '' : 's'}`;
+  if (ui.searchBusy) return `Searching ${passages}\u2026`;
+  if (!ui.searchResults.length) return `No match in ${passages}.`;
+  if (ui.searchResults.length > SEARCH_ROWS) {
+    return `Showing ${SEARCH_ROWS} of ${ui.searchResults.length} in ${passages}. Keep typing to narrow.`;
+  }
+  return `Found in ${passages}.`;
+}
+
+function renderSearchPanel(box) {
+  const rows = ui.searchResults.slice(0, SEARCH_ROWS);
+  const count = ui.searchResults.length;
+  const countLabel = ui.searchTruncated ? 'many matches'
+    : count ? `${count} match${count === 1 ? '' : 'es'}` : '';
+
+  let head = '<div class="search-head"><span>Cached passages</span>';
+  if (ui.searchBusy) head += '<span class="search-state">searching\u2026</span>';
+  else if (countLabel) head += `<span class="search-count">${countLabel}</span>`;
+  head += '</div>';
+
+  let body;
+  if (!rows.length) {
+    const message = ui.searchBusy
+      ? 'Looking through cached passages\u2026'
+      : `Nothing cached matches \u201c${ui.searchTerm}\u201d`;
+    body = `<div class="search-empty">${esc(message)}</div>`;
+  } else {
+    body = '<div class="search-rows">' + rows.map((verse, i) => `
+      <div class="search-row${i === ui.searchIndex ? ' active' : ''}" data-hit="${i}">
+        <div class="search-ref">${esc(verse.reference)}</div>
+        <div class="search-snip">${esc(snippetFor(verse, ui.searchTerm))}</div>
+      </div>`).join('') + '</div>';
+  }
+
+  box.innerHTML = head + body + `<div class="search-foot">${esc(searchFooter())}</div>`;
+  box.classList.add('search-mode');
+  box.classList.remove('hidden');
+  $('search-field').classList.add('searching');
+}
+
 function renderSuggestions() {
   const box = $('suggestions');
+
+  if (ui.keywordMode) {
+    renderSearchPanel(box);
+    return;
+  }
+
+  box.classList.remove('search-mode');
+  $('search-field').classList.remove('searching');
+
   if (!ui.suggestions.length) {
     box.classList.add('hidden');
     box.innerHTML = '';
@@ -715,8 +821,35 @@ function renderSuggestions() {
 function updateSuggestions(value) {
   ui.suggestions = NB.suggestions(value);
   ui.suggestionIndex = -1;
-  renderSuggestions();
   $('search-clear').classList.toggle('hidden', !value.length);
+
+  if (!isKeywordTerm(value)) {
+    clearSearchState();
+    renderSuggestions();
+    return;
+  }
+
+  const term = String(value).trim();
+  ui.keywordMode = true;
+  ui.searchTerm = term;
+  ui.searchIndex = -1;
+  ui.searchResults = [];
+  ui.searchBusy = true;
+  renderSuggestions();
+
+  clearTimeout(searchTimer);
+  const token = ++searchToken;
+  searchTimer = setTimeout(async () => {
+    if (!bridge || !bridge.searchCached) return;
+    const result = await bridge.searchCached(term);
+    if (token !== searchToken) return;
+    ui.searchResults = (result && result.verses) || [];
+    ui.searchScanned = (result && result.passages) || 0;
+    ui.searchTruncated = !!(result && result.truncated);
+    ui.searchBusy = false;
+    ui.searchIndex = ui.searchResults.length ? 0 : -1;
+    renderSuggestions();
+  }, 150);
 }
 
 function submitSearch(value) {
@@ -724,9 +857,33 @@ function submitSearch(value) {
   if (!trimmed) return;
   ui.suggestions = [];
   ui.suggestionIndex = -1;
+  clearSearchState();
   renderSuggestions();
   $('search-input').blur();
   load(PassageQuery.userInput(trimmed));
+}
+
+async function openSearchHit(hit) {
+  const input = $('search-input');
+  input.value = '';
+  ui.suggestions = [];
+  ui.suggestionIndex = -1;
+  clearSearchState();
+  renderSuggestions();
+  input.blur();
+
+  await load(PassageQuery.userInput(`${hit.bookname} ${hit.chapter}`));
+
+  const verse = ui.verses.find((v) => v.id === hit.id);
+  if (!verse) return;
+
+  ui.selectedVerseId = verse.id;
+  const row = document.querySelector(`.verse-row[data-id="${CSS.escape(verse.id)}"]`);
+  if (row) {
+    row.classList.add('selected');
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  renderActionBar();
 }
 
 /* ---------- events ---------- */
@@ -930,13 +1087,22 @@ function bindStatic() {
   input.addEventListener('blur', () => {
     $('search-field').classList.remove('focused');
     setTimeout(() => {
+      clearSearchState();
       ui.suggestions = [];
       renderSuggestions();
     }, 120);
   });
   input.addEventListener('input', () => updateSuggestions(input.value));
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowDown' && ui.suggestions.length) {
+    const visibleHits = Math.min(ui.searchResults.length, SEARCH_ROWS);
+
+    if (ui.keywordMode && visibleHits && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      const current = ui.searchIndex < 0 ? (delta > 0 ? -1 : 0) : ui.searchIndex;
+      ui.searchIndex = Math.min(Math.max(current + delta, 0), visibleHits - 1);
+      renderSuggestions();
+    } else if (event.key === 'ArrowDown' && ui.suggestions.length) {
       event.preventDefault();
       ui.suggestionIndex = (ui.suggestionIndex + 1) % ui.suggestions.length;
       renderSuggestions();
@@ -946,7 +1112,10 @@ function bindStatic() {
       renderSuggestions();
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (ui.suggestionIndex >= 0 && ui.suggestions[ui.suggestionIndex]) {
+      if (ui.keywordMode && ui.searchResults.length) {
+        const index = Math.min(Math.max(ui.searchIndex, 0), visibleHits - 1);
+        openSearchHit(ui.searchResults[index]);
+      } else if (ui.suggestionIndex >= 0 && ui.suggestions[ui.suggestionIndex]) {
         input.value = `${ui.suggestions[ui.suggestionIndex]} `;
         ui.suggestions = [];
         ui.suggestionIndex = -1;
@@ -955,6 +1124,10 @@ function bindStatic() {
         submitSearch(input.value);
       }
     } else if (event.key === 'Escape') {
+      if (ui.keywordMode) {
+        input.value = '';
+        updateSuggestions('');
+      }
       input.blur();
     }
   });
@@ -966,6 +1139,14 @@ function bindStatic() {
   });
 
   $('suggestions').addEventListener('mousedown', (event) => {
+    const hitRow = event.target.closest('[data-hit]');
+    if (hitRow) {
+      event.preventDefault();
+      const hit = ui.searchResults[Number(hitRow.dataset.hit)];
+      if (hit) openSearchHit(hit);
+      return;
+    }
+
     const row = event.target.closest('[data-name]');
     if (!row) return;
     event.preventDefault();
@@ -995,6 +1176,7 @@ function bindStatic() {
       switch (command) {
         case 'focus-search':
           ui.suggestions = [];
+          clearSearchState();
           renderSuggestions();
           $('search-input').focus();
           $('search-input').select();

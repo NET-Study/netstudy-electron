@@ -3,7 +3,7 @@
 const path = require('path');
 const { app, BrowserWindow, Menu, ipcMain, clipboard, shell, nativeTheme, dialog } = require('electron');
 
-const { fetchPassage } = require('./api');
+const { fetchPassage, searchCached } = require('./api');
 const { loadState, saveState } = require('./store');
 
 const isMac = process.platform === 'darwin';
@@ -149,6 +149,7 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     ipcMain.handle('bible:fetch', (_event, passage) => fetchPassage(passage));
+    ipcMain.handle('bible:search', (_event, term) => searchCached(term));
     ipcMain.handle('state:load', () => loadState());
     ipcMain.handle('state:save', (_event, state) => saveState(state));
     ipcMain.handle('clipboard:write', (_event, text) => {

@@ -29,6 +29,9 @@ lists (`John 3:16-17; Psalms 23`).
 - **Saved & Notes** in the sidebar, jumping back to the passage.
 - **Verse of the Day** and **random passages**.
 - **Offline cache** — every passage read is cached on disk.
+- **Keyword search over the cache** — type a word or phrase in the search field and it
+  searches every passage you've already opened (all words must match, case-insensitive).
+  Arrow keys move through results, Enter opens the verse and scrolls to it.
 - Light / dark / system appearance, adjustable size, column width, serif toggle.
 
 ## Run it
@@ -40,7 +43,7 @@ npm start
 
 ## Install on Windows
 
-Grab `NET-Study-Setup-1.0.0-x64.exe` from
+Grab `NET-Study-Setup-1.0.1-x64.exe` from
 [Releases](https://github.com/occiderunt/netstudy-windows/releases/latest) and run it
 (Windows 10/11, 64-bit). The installer is unsigned, so SmartScreen may show
 "Windows protected your PC" — choose **More info**, then **Run anyway**.

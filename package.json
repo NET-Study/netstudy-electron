@@ -1,7 +1,7 @@
 {
   "name": "net-study",
   "productName": "NET Study",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A quiet NET Bible study reader for Windows, macOS and Linux",
   "main": "src/main.js",
   "author": "NET Study",
