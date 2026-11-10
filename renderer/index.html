@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NET Study</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="titlebar"><span>NET Study</span></div>
+
+  <div class="shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-head">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+        </div>
+        <div class="brand">
+          <div class="brand-name">NET Study</div>
+          <div class="brand-sub">New English Translation</div>
+        </div>
+      </div>
+
+      <div class="segmented" id="segmented">
+        <button data-section="read" class="seg-btn active">Read</button>
+        <button data-section="saved" class="seg-btn">Saved</button>
+        <button data-section="notes" class="seg-btn">Notes</button>
+      </div>
+
+      <div class="sidebar-scroll" id="sidebar-list"></div>
+
+      <div class="sidebar-foot">
+        <button class="soft-btn" id="btn-random-foot">
+          <span data-icon="shuffle"></span> Random
+        </button>
+        <span class="version" title="NET Study for Windows">v1.0</span>
+      </div>
+    </aside>
+
+    <main class="reader">
+      <header class="reader-header" id="reader-header">
+        <button class="icon-btn" id="btn-sidebar" title="Toggle sidebar" aria-label="Toggle sidebar">
+          <span data-icon="sidebar"></span>
+        </button>
+        <div class="v-divider"></div>
+        <button class="icon-btn" id="btn-prev" title="Previous chapter" aria-label="Previous chapter">
+          <span data-icon="left"></span>
+        </button>
+        <button class="icon-btn" id="btn-next" title="Next chapter" aria-label="Next chapter">
+          <span data-icon="right"></span>
+        </button>
+
+        <div class="title-block">
+          <div class="doc-title" id="doc-title">John 1</div>
+          <div class="doc-sub" id="doc-sub">New English Translation</div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="search-wrap">
+          <div class="search-field" id="search-field">
+            <span data-icon="search" class="search-icon"></span>
+            <input id="search-input" type="text" placeholder="Go to John 3:16" autocomplete="off" spellcheck="false" aria-label="Go to reference">
+            <button class="clear-btn hidden" id="search-clear" aria-label="Clear">
+              <span data-icon="x"></span>
+            </button>
+          </div>
+          <div class="suggestions hidden" id="suggestions"></div>
+        </div>
+
+        <button class="icon-btn" id="btn-votd" title="Verse of the Day">
+          <span data-icon="sun"></span>
+        </button>
+        <button class="icon-btn" id="btn-random" title="Random verse">
+          <span data-icon="shuffle"></span>
+        </button>
+        <button class="icon-btn" id="btn-settings" title="Reading settings">
+          <span data-icon="type"></span>
+        </button>
+      </header>
+
+      <div class="reader-body" id="reader-body"></div>
+
+      <div class="action-bar hidden" id="action-bar"></div>
+
+      <div class="settings hidden" id="settings">
+        <div class="settings-title">Reading</div>
+
+        <div class="setting">
+          <div class="setting-head"><span>Text size</span><span class="setting-value" id="size-value">19 pt</span></div>
+          <div class="slider-row">
+            <span class="slider-a">A</span>
+            <input type="range" id="set-size" min="14" max="28" step="1">
+            <span class="slider-a big">A</span>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-head"><span>Column width</span><span class="setting-value" id="width-value">720</span></div>
+          <input type="range" id="set-width" min="520" max="900" step="10">
+        </div>
+
+        <label class="switch-row">
+          <span>Serif type</span>
+          <input type="checkbox" id="set-serif">
+          <span class="switch"></span>
+        </label>
+
+        <div class="setting">
+          <div class="setting-label">Appearance</div>
+          <div class="segmented small" id="set-appearance">
+            <button data-appearance="system" class="seg-btn">System</button>
+            <button data-appearance="light" class="seg-btn">Light</button>
+            <button data-appearance="dark" class="seg-btn">Dark</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="overlay hidden" id="note-overlay">
+    <div class="note-card" role="dialog" aria-modal="true" aria-label="Note editor">
+      <div class="note-head">
+        <div class="note-eyebrow" id="note-ref">JOHN 3:16</div>
+        <div class="note-verse" id="note-verse"></div>
+      </div>
+      <div class="note-body-wrap">
+        <textarea id="note-body" placeholder="Write your note&hellip;" spellcheck="true"></textarea>
+      </div>
+      <div class="note-foot">
+        <button class="text-btn danger" id="note-delete">Delete</button>
+        <div class="spacer"></div>
+        <button class="soft-btn" id="note-cancel">Cancel</button>
+        <button class="soft-btn prominent" id="note-save">Save Note</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../src/core/bible.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
