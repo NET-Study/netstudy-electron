@@ -38,6 +38,18 @@ npm install
 npm start
 ```
 
+## Install on Windows
+
+Grab `NET-Study-Setup-1.0.0-x64.exe` from
+[Releases](https://github.com/occiderunt/netstudy-windows/releases/latest) and run it
+(Windows 10/11, 64-bit). The installer is unsigned, so SmartScreen may show
+"Windows protected your PC" — choose **More info**, then **Run anyway**.
+
+Releases are built on a GitHub Windows runner by
+`.github/workflows/build-windows.yml`, which runs on any `v*` tag or on demand. The
+portable build is intentionally not published: antivirus engines flag self-extracting
+single-file exes as false positives.
+
 ## Build a Windows app
 
 ```bash
