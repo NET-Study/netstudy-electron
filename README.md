@@ -1,7 +1,7 @@
 # NET Study (Electron)
 
 A quiet study Bible reader for the New English Translation, ported from the native
-macOS app in `../netstudyapp`. Same core logic, same data model, same look, but it
+macOS app in NET-Study/netstudy-mac. Same core logic, same data model, same look, but it
 runs on Windows (and macOS/Linux) as an Electron app with no build step for the UI.
 
 ![app](docs/screenshot.png)
